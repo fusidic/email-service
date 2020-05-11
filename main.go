@@ -2,16 +2,26 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"log"
 
 	pb "github.com/fusidic/user-service/proto/user"
 	micro "github.com/micro/go-micro"
-	"github.com/micro/go-micro/broker"
-	_ "github.com/micro/go-plugins/broker/nats"
+	_ "github.com/micro/go-plugins/broker/googlepubsub"
 )
 
 const topic = "user.created"
+
+// Subscriber handler for subscribe message
+// 响应订阅信息
+type Subscriber struct{}
+
+// Process 订阅消息的响应函数
+func (s *Subscriber) Process(ctx context.Context, user *pb.User) error {
+	log.Println("Picked up a new message")
+	log.Println("Sending email to: ", user.Name)
+	return nil
+}
 
 func main() {
 	srv := micro.NewService(
@@ -21,26 +31,29 @@ func main() {
 
 	srv.Init()
 
-	// 通过环境变量获取代理示例信息
-	pubsub := srv.Server().Options().Broker
-	if err := pubsub.Connect(); err != nil {
-		log.Fatal(err)
-	}
+	// 不再需要第三方代理了
+	// // 通过环境变量获取代理信息
+	// pubsub := srv.Server().Options().Broker
+	// if err := pubsub.Connect(); err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	// 将消息发布到代理上
-	_, err := pubsub.Subscribe(topic, func(e broker.Event) error {
-		var user *pb.User
-		if err := json.Unmarshal(e.Message().Body, &user); err != nil {
-			return err
-		}
-		log.Println(user)
-		go sendEmail(user)
-		return nil
-	})
+	// // 订阅消息，定义消息的回调函数，对消息进行反序列化
+	// _, err := pubsub.Subscribe(topic, func(e broker.Event) error {
+	// 	var user *pb.User
+	// 	if err := json.Unmarshal(e.Message().Body, &user); err != nil {
+	// 		return err
+	// 	}
+	// 	log.Println(user)
+	// 	go sendEmail(user)
+	// 	return nil
+	// })
 
-	if err != nil {
-		log.Println(err)
-	}
+	// if err != nil {
+	// 	log.Println(err)
+	// }
+
+	micro.RegisterSubscriber(topic, srv.Server(), new(Subscriber))
 
 	// 运行服务
 	if err := srv.Run(); err != nil {
